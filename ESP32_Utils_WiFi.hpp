@@ -1,9 +1,9 @@
 #pragma once
 
 AsyncWebServer server1(80);
-bool wm_nonblocking = false; // change to true to use non blocking
-WiFiManager wm; // global wm instance
-WiFiManagerParameter custom_field; // global param ( for non blocking w params )
+bool wm_nonblocking = false; 
+WiFiManager wm; 
+WiFiManagerParameter custom_field; 
 
 String getParam(String name){
   
@@ -45,21 +45,23 @@ void inicializar_conexion(){
   bool res;
   // res = wm.autoConnect(); // auto generated AP name from chipid
   // res = wm.autoConnect("AutoConnectAP"); // anonymous ap
-  res = wm.autoConnect("AutoConnectAP","password"); // password protected ap
+
+  //SSID Y CONTRASENA DEL PORTAL CAUTIVO
+  res = wm.autoConnect("ESP32_CONFIG","123456789"); 
   if(!res) {
-    Serial.println("Failed to connect or hit timeout");
+    Serial.println("cONEXION FALLIDA");
     // ESP.restart();
   } 
   else {
     //if you get here you have connected to the WiFi    
-    Serial.println("connected...yeey :)");
+    Serial.println("CONECTADO!!! ");
     server1.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
     request->send(200, "text/plain", "Hi! I am ESP32.");
     });
 
   AsyncElegantOTA.begin(&server1);    // Start ElegantOTA   subir bin
   server1.begin();
-  Serial.println("HTTP server1 started");
+  Serial.println("INICIO SERVIDOR HTTP ");
   }
 
 

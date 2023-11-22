@@ -29,20 +29,17 @@ void callback(char* topic, byte* payload, unsigned int length) {
 
 void reconnect() {
   while (!client.connected()) {
-    Serial.print("Attempting MQTT connection...");
-    if (client.connect(WiFi.macAddress().c_str(),mqtt_user,mqtt_pass)) {
-      Serial.println("connected");
-      client.subscribe(t_temperatura);
-      //client.subscribe(topicEventos);
-      //client.subscribe(topicConexion);
+    Serial.print("Esperando conexion MQTT...");
+    if (client.connect(WiFi.macAddress().c_str())) {
+      Serial.println("conectado...");
+      client.subscribe(t_temperatura); // suscribe a topico de temperatura
       delay(20);
       client.publish(t_status, m_online);
-      //client.publish(topicEventos, "ESP inicio...");
       
     } else {
-      Serial.print("failed, rc=");
+      Serial.print("error, rc=");
       Serial.print(client.state());
-      Serial.println(" try again in 5 seconds");
+      Serial.println(" intentado despues de 5 segundos");
       delay(10000);
       ESP.restart();
     }

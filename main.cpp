@@ -1,3 +1,12 @@
+/////////////////////////////////
+//
+//
+//      SENSOR DE TEMPERATURA Y HUMEDAD
+//      TALLER UTN
+//      2023-11-22
+//
+////////////////////////////////
+
 #include <EEPROM.h>
 #include <ESP32Time.h>
 #include <Arduino.h>
@@ -13,18 +22,21 @@
 #include <ArduinoJson.h>
 #include <TM1637Display.h>
 
+// archivos de configuracion
 #include "config.h"
 #include "ESP32_Utils_WiFi.hpp"
 #include "ESP32_Utils_MQTT.hpp"
 
+
+#define uS_TO_S_FACTOR 1000000ULL  //factor de conversion de micro segundos a segundos
+#define TIME_TO_SLEEP  110        //tiempo en segundos que el ESP entra en modo sleep
+#define TRIGGER_PIN 12
+
+
+// pin y configuracion para sensor de temperatura
 #define DHTPIN 4
 #define DHTTYPE DHT22
-#define uS_TO_S_FACTOR 1000000ULL  /* Conversion factor for micro seconds to seconds */
-#define TIME_TO_SLEEP  600        /* Time ESP32 will go to sleep (in seconds) */ 
-#define TRIGGER_PIN 12
-#define EEPROM_SIZE 12
-
-
+// pines para display 7 segmentos alimentado a 3.3V
 #define CLK 22
 #define DIO 23
 #define VCC_D 13
@@ -35,7 +47,6 @@ TaskHandle_t Task1;
 ESP32Time rtc;
 
 
-//ESP.restart();
 DHT dht(DHTPIN, DHTTYPE);
 
 RTC_DATA_ATTR int bootCount = 0; //portal cautivo
@@ -43,8 +54,7 @@ RTC_DATA_ATTR int bootCount = 0; //portal cautivo
 //RTC_DATA_ATTR int bootCount = 0;
 int ledState = LOW;             
 
-unsigned long previousMillis = 0;        // will store last time LED was updated
-
+unsigned long previousMillis = 0;        
 const long interval = 60000;   // tiempo de adquisicion de lectura del sensor
 
 int reseteo=0;
@@ -54,7 +64,7 @@ String host_mac;
 
 
 
-void DHT222_humedad(float H,float T){
+void DHT22_envio(float H,float T){
 
   char D_humedad[18];
   dtostrf(H, 1, 5, D_humedad);
@@ -64,28 +74,18 @@ void DHT222_humedad(float H,float T){
   String trama_json = WiFi.macAddress() + "," + String(T,2) + "," + String(H,2);
   char enviar[50];
   trama_json.toCharArray(enviar,trama_json.length()+1);
-  client.publish(t_temperatura, enviar);
-  //String trama_json = "{ \"temperatura\": " + String(T,2) + ", \"humedad\": " + String(H,0) + "}";
-  //String trama_json = WiFi.macAddress() + "," + String(T,2) + "," + String(H,2);
-  //char enviar[50];
-  //trama_json.toCharArray(enviar,trama_json.length()+1);
+  client.publish(t_temperatura, enviar);   // envio de datos MQTT
 
-  //client.publish("/ha/sensor1/", "{ \"temperatura\": 21, \"humedad\": 75}");
-  //client.publish(t_temperatura, enviar);
 }
 
 
 void loop2(void *parameter){
-  delay(10000);
-  reseteo = EEPROM.read(0);
-  //EEPROM.write(0, 1);
-  //EEPROM.write(0, 1);
-  //EEPROM.commit();
+
   for(;;){
-    //Serial.println(reseteo);
-  
-    //Serial.println("loop2");
-   
+    digitalWrite(ledPin,HIGH);
+    delay(500);
+    digitalWrite(ledPin,LOW);
+    delay(500);
  
    vTaskDelay(10);
   }
@@ -117,6 +117,9 @@ void setup() {
   delay(2000);
   dht.begin();
   
+  //configuracion tiempo de hibernacion
+  // esp_sleep_enable_timer_wakeup(TIME_TO_SLEEP * uS_TO_S_FACTOR);
+
   /// ESP32 en modo AP para realizar la primera conexion
   inicializar_conexion();
 
@@ -131,26 +134,23 @@ void setup() {
   client.setServer(mqtt_server, mqtt_port);
   client.setCallback(callback);
   client.connected();
-  //pinMode(LED_BUILTIN, OUTPUT);
+  
 
 }
 
 void checkButton(){
-  // check for button press
+  // verificar si el boton de reset se presiona
   if ( digitalRead(TRIGGER_PIN) == LOW) {
-    // poor mans debounce/press-hold, code not ideal for production
-    delay(50);
+      delay(50);
     if( digitalRead(TRIGGER_PIN) == LOW ){
-      Serial.println("Button Pressed");
-      // still holding button for 3000 ms, reset settings, code not ideaa for production
-      delay(3000); // reset delay hold
+      Serial.println("Boton Presionado");
+      delay(3000); 
       if( digitalRead(TRIGGER_PIN) == LOW ){
-        Serial.println("Button Held");
-        Serial.println("Erasing Config, restarting");
+        Serial.println("Borrando configuracion y reiniciando...");
         wm.resetSettings();
         ESP.restart();
       }
-      // start portal w delay 
+      // Inicia en modo portal cautivo
     }
   }
   
@@ -158,8 +158,7 @@ void checkButton(){
 
 void loop() {
   checkButton();
-  if(wm_nonblocking) wm.process(); // avoid delays() in loop when non-blocking and other long running code  
-  
+  if(wm_nonblocking) wm.process(); 
   if (!client.connected()) {
     reconnect();
   }
@@ -172,20 +171,10 @@ void loop() {
     
     previousMillis = currentMillis;
 
-    //////encender led interno
-    /*
-    if (ledState == LOW) {
-      ledState = HIGH;
-    } else {
-      ledState = LOW;
-    }
-    digitalWrite(ledPin, ledState);
-    
-    */
     ////// monitoreo temperatura
      float h = dht.readHumidity();
      float t = dht.readTemperature(); 
-     DHT222_humedad(h,t);
+     DHT22_envio(h,t);
      Serial.print(F("Humedad: "));
      Serial.print(h);
      Serial.print(F("% Temperatura: "));
@@ -193,27 +182,11 @@ void loop() {
      Serial.println(F("°C "));
      int temperatura;
      temperatura = t * 10; 
-     //Display the temperature in Celsius
-     //display.showNumberDec(temperatura, false, 3, 0);
-     //display.setSegments(Celsius, 1, 3);
 
     display.showNumberDecEx(temperatura,0b01000000,false,3,0);
     display.setSegments(Celsius, 1, 3);
 
-    // Display the temperature in Celsius
-     //display.showNumberDec(temperatura, false, 3, 0);
-     //display.setSegments(Celsius, 1, 3);
-
-   
-    //Serial.print(host_mac[0]);
-    //Serial.println(host_mac[1]);
-    
-    //display.showNumberHexEx(0xf1af);
-    //for(int k=0; k <= 4; k++) {
-		//display.showNumberDecEx(t,(0x80 >> k), false,0);
-		//delay(2000);
-	  //}
-	
-    
+ 
     }
+    //esp_deep_sleep_start(); activar modo hibernacion
 }
